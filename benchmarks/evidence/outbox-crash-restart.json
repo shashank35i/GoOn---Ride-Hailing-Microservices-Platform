@@ -1,0 +1,20 @@
+﻿{
+    "result":  "PARTIAL/FAIL - six in-flight HTTP requests failed during forced termination",
+    "rideRequestedOutboxRows":  194,
+    "setup":  "200 attempted creates; 20 threads x 10 loops; RideService killed during load",
+    "rideRows":  194,
+    "maxOffersPerRide":  1,
+    "pendingAfter60Seconds":  0,
+    "outboxPublishedAfterRestart":  194,
+    "sameEventIdReplay":  {
+                              "offersBefore":  1,
+                              "offersAfter":  1,
+                              "processedEventCountBefore":  1,
+                              "processedEventCountAfter":  1
+                          },
+    "attempted":  200,
+    "httpStatusCounts":  {
+                             "201":  194,
+                             "500":  6
+                         }
+}

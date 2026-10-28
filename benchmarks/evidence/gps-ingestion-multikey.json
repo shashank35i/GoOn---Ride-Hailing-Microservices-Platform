@@ -1,0 +1,41 @@
+﻿{
+    "caveat":  "single-host run; 500-thread load saturated CPU, and the result does not isolate partitioning as the cause of throughput",
+    "setup":  "20 driver IDs; 100/250/500 threads x 60 s each; 2 s pacing",
+    "results":  [
+                    {
+                        "p50Ms":  6,
+                        "threads":  100,
+                        "samples":  2797,
+                        "http202":  2797,
+                        "p95Ms":  23,
+                        "rps":  48.62,
+                        "p99Ms":  89,
+                        "errorPercent":  0
+                    },
+                    {
+                        "p50Ms":  8,
+                        "threads":  250,
+                        "samples":  6872,
+                        "http202":  6872,
+                        "p95Ms":  249,
+                        "rps":  118.75,
+                        "p99Ms":  600,
+                        "errorPercent":  0
+                    },
+                    {
+                        "p50Ms":  40,
+                        "ramPeakMiB":  16073.5,
+                        "cpuPeakPercent":  100,
+                        "samples":  12801,
+                        "threads":  500,
+                        "kafkaLagImmediatelyAfter":  1006,
+                        "http202":  12801,
+                        "cpuAveragePercent":  88.76,
+                        "p95Ms":  1212,
+                        "kafkaLagAfterDrain":  0,
+                        "rps":  221.33,
+                        "p99Ms":  1637,
+                        "errorPercent":  0
+                    }
+                ]
+}

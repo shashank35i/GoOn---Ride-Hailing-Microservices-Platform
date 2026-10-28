@@ -1,0 +1,13 @@
+﻿{
+    "ridesLeftRequestedAfterDecline":  10,
+    "setup":  "20 rides x 50 synchronized requests (25 accepts + 25 declines per ride)",
+    "result":  "PASS - one terminal action won per ride; not every ride was accepted",
+    "samples":  1000,
+    "assignedRidesWithOneAcceptedOfferAndAssignmentEvent":  10,
+    "httpStatusCounts":  {
+                             "500":  0,
+                             "204":  10,
+                             "409":  980,
+                             "200":  10
+                         }
+}

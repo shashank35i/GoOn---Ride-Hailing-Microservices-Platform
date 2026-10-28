@@ -1,0 +1,8 @@
+﻿{
+    "scope":  "warning counts from Keycloak logs, not a direct OAuth token-fetch counter",
+    "focusedRetestWarningsAfter":  2,
+    "baseline":  "200-thread cold-cache burst",
+    "windowBeforeSeconds":  3,
+    "keycloakTokenEndpointWarningsBefore":  100,
+    "caveat":  "the focused token test at that point still had an independent idempotency failure; later same-key idempotency validation passed after UUID mapping correction"
+}

@@ -1,0 +1,11 @@
+﻿{
+    "setup":  "10 pairs x 2 simultaneous accepts, same driver per pair",
+    "result":  "PASS",
+    "pairsWithDoubleSuccess":  0,
+    "samples":  20,
+    "pairsWithExactlyOneSuccess":  10,
+    "httpStatusCounts":  {
+                             "200":  10,
+                             "409":  10
+                         }
+}

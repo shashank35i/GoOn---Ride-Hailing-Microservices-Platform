@@ -1,0 +1,8 @@
+﻿{
+    "setup":  "Single-driver 500-thread snapshots before and after topic/consumer expansion",
+    "observedImmediateReductionPercent":  65.4,
+    "beforeImmediateLag":  8817,
+    "afterThirtySeconds":  0,
+    "caveat":  "separate local runs; one driver key maps to one partition, so this is not a controlled causal proof or evidence that a single hot key scales across partitions",
+    "afterImmediateLag":  3049
+}

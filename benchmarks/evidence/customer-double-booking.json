@@ -1,0 +1,11 @@
+﻿{
+    "setup":  "1 run x 2 synchronized threads; distinct Idempotency-Keys; same customer and signed quote",
+    "rideRequestedOutboxRows":  1,
+    "result":  "PASS",
+    "rideRowsForKeys":  1,
+    "customerActiveClaimRows":  1,
+    "httpStatusCounts":  {
+                             "201":  1,
+                             "409":  1
+                         }
+}

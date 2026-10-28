@@ -1,0 +1,15 @@
+﻿{
+    "samples":  200,
+    "p50Ms":  1784,
+    "p99Ms":  2213,
+    "rideRowsForKey":  1,
+    "setup":  "1 run x 200 synchronized threads; same customer, signed quote, and Idempotency-Key",
+    "rideRequestedOutboxRows":  1,
+    "p95Ms":  2188,
+    "throughputRequestsPerSecond":  89.29,
+    "result":  "PASS",
+    "httpStatusCounts":  {
+                             "201":  200,
+                             "httpErrors":  0
+                         }
+}

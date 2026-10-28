@@ -1,0 +1,7 @@
+﻿{
+    "scope":  "database lock-cycle demonstration only; not an application endpoint reproduction",
+    "result":  "PASS - mechanism demonstrated",
+    "innodbLatestDetectedDeadlockCaptured":  true,
+    "setup":  "two independent MySQL transactions acquired opposing ride/offer row locks",
+    "mysqlError":  1213
+}
