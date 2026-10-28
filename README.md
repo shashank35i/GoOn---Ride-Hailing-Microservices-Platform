@@ -1,40 +1,21 @@
-# GoOn — Ride-Hailing Microservices Platform
+﻿# GoOn — Ride-Hailing Microservices Platform
 
-**A ride-hailing backend built around atomic bookings, event-driven GPS, route-aware pricing, and verified lifecycle transitions.**
+GoOn is a Spring Boot microservices project for ride booking, driver matching, live location, pricing, notifications, and payments.
 
-GoOn consists of ten independently versioned Spring Boot services. This repository is the platform overview; the service implementations remain in their own repositories.
+## Services
 
-> **Status:** portfolio/local-development system. Measurements below are local validation results, not production SLAs. Dependencies and integrations require separate configuration.
-
-## Engineering results at a glance
-
-| Engineering problem | Design / measured outcome |
-|---|---|
-| Customer double-booking | Atomic `customer_active_rides` claim in the same transaction as `Ride` and `RIDE_REQUESTED` outbox: two simultaneous different-key requests yielded **1 HTTP 201 + 1 HTTP 409**, with one ride and one outbox row. |
-| Competing ride accepts | Pessimistic Ride → RideOffer lock order and unique `driver_assignments` claim. Ten one-driver/two-ride races had one winner each; accept/decline races preserved one terminal action per ride. |
-| Same-key retry | Customer + `Idempotency-Key` uniqueness and stored request hash; a 200-thread run returned **200 × HTTP 201**, with one ride and one outbox event. |
-| UUID lookup failure | Diagnosed Hibernate/MySQL `BINARY(64)` versus 16-byte UUID binding mismatch. Corrected UUID storage to `BINARY(16)`; the later same-key retry run passed. |
-| GPS ingestion | 100 / 250 / 500-thread JMeter runs returned **22,470 HTTP 202, 0% errors** total. At 500 threads: **221.33 req/s**, p95 **1,212 ms**; Kafka lag drained to zero after the test. |
-| Outbox recovery | After forced Ride Service termination, 194 acknowledged rides had published outbox rows and replay created no second offer. Six in-flight requests returned HTTP 500, so this run is **partial/fail**, not all-success. |
-| OAuth2 token burst | Keycloak logs went from 100 token-endpoint warnings in a 3-second cold burst to 2 around a focused retest. These are warning counts, not a direct token-fetch counter. |
-| Redis/Lettuce publish debugging | A development run reported roughly 10× duplicate location broadcasts. The current path keeps `GEOADD` + `EXPIRE` in the pipeline and sends one typed Lettuce `SPUBLISH` afterward. The 10× figure was not retained as a controlled benchmark. |
-
-The benchmark bundle contains portable JMeter plans, sanitized JTLs, result summaries, and SQL checks: [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md).
-
-## Service repositories
-
-| Service | Responsibility | Repository |
+| Service | Role | Repository |
 |---|---|---|
-| API Gateway | HTTP routing, JWT validation, internal OAuth2 client-credentials relay | [Api-Gateway-Service](https://github.com/shashank35i/Api-Gateway-Service) |
-| Customer Service | Customer identity and login | [Customer-Service](https://github.com/shashank35i/Customer-Service) |
-| Driver Service | Driver APIs and offer actions | [Driver-Service](https://github.com/shashank35i/Driver-Service) |
-| Ride Service | Quotes, rides, matching, assignments, lifecycle, outbox | [Ride-Service](https://github.com/shashank35i/Ride-Service) |
-| Pricing Service | Signed fare quotes and final fare; OSRM routing | [Pricing-Service](https://github.com/shashank35i/Pricing-Service) |
-| Location Ingestion Service | HTTP GPS intake and Kafka publishing | [location-ingestion-service](https://github.com/shashank35i/location-ingestion-service) |
-| Location Sync Service | Kafka consumers and Redis live-location state | [location-sync-service](https://github.com/shashank35i/location-sync-service) |
-| Notification Service | Event-driven notifications, Redis Pub/Sub, Firebase push | [Notification-Service](https://github.com/shashank35i/Notification-Service) |
-| Payment Service | Razorpay checkout, webhook validation, payment outbox | [Payment-Service](https://github.com/shashank35i/Payment-Service) |
-| WebSocket Gateway | STOMP/WebSocket and live ride-location fan-out | [ws-gateway-service](https://github.com/shashank35i/ws-gateway-service) |
+| API Gateway | Routing and request authentication | [Api-Gateway-Service](https://github.com/shashank35i/Api-Gateway-Service) |
+| Customer Service | Customer accounts | [Customer-Service](https://github.com/shashank35i/Customer-Service) |
+| Driver Service | Driver APIs and ride offers | [Driver-Service](https://github.com/shashank35i/Driver-Service) |
+| Ride Service | Booking, matching, ride lifecycle | [Ride-Service](https://github.com/shashank35i/Ride-Service) |
+| Pricing Service | Signed quotes and final fares | [Pricing-Service](https://github.com/shashank35i/Pricing-Service) |
+| Location Ingestion | GPS HTTP endpoint and Kafka producer | [location-ingestion-service](https://github.com/shashank35i/location-ingestion-service) |
+| Location Sync | Kafka consumers and Redis location state | [location-sync-service](https://github.com/shashank35i/location-sync-service) |
+| Notification Service | Redis notifications and Firebase push | [Notification-Service](https://github.com/shashank35i/Notification-Service) |
+| Payment Service | Razorpay checkout and webhook handling | [Payment-Service](https://github.com/shashank35i/Payment-Service) |
+| WebSocket Gateway | Live ride updates over STOMP/WebSocket | [ws-gateway-service](https://github.com/shashank35i/ws-gateway-service) |
 
 ## Architecture
 
@@ -46,238 +27,102 @@ flowchart LR
     Gateway --> Customer[Customer Service]
     Gateway --> Driver[Driver Service]
     Gateway --> Ride[Ride Service]
-    Gateway --> Ingest[Location Ingestion Service]
+    Gateway --> Ingest[Location Ingestion]
     Gateway --> Payment[Payment Service]
     Gateway --> WS[WebSocket Gateway]
 
-    Ride -->|gRPC: estimate / final fare| Pricing[Pricing Service]
-    Pricing -->|HTTP route lookup| OSRM[Self-hosted OSRM :5000]
+    Ride -->|gRPC| Pricing[Pricing Service]
+    Pricing -->|route lookup| OSRM[Self-hosted OSRM]
     Ride -->|transactional outbox| Kafka[(Kafka)]
-    Kafka -->|ride and payment events| Ride
-    Kafka --> Notification[Notification Service]
-    Kafka --> Payment
-    Notification --> FCM[Firebase FCM]
-    Payment -->|checkout / verified webhook| Razorpay[Razorpay]
-
     Ingest -->|GPS events| Kafka
-    Kafka --> LocationSync[Location Sync Service]
+    Kafka --> LocationSync[Location Sync]
     LocationSync --> Redis[(Redis)]
-    Ride -->|GEOSEARCH and arrival checks| Redis
-    Redis -->|SSUBSCRIBE ride-location channel| WS
+    Ride -->|nearby search and ride checks| Redis
+    Redis -->|sharded Pub/Sub| WS
     WS -->|STOMP / WebSocket| Apps
+    Kafka --> Notification[Notification Service]
+    Notification --> FCM[Firebase FCM]
+    Payment --> Razorpay[Razorpay]
 ```
 
-### Live GPS and notifications
+### GPS and driver matching
 
-Idle-driver availability and an active ride's location use separate Kafka topics and keys:
+Driver GPS requests go through Location Ingestion into Kafka. Idle-driver updates use the `driver-locations` topic keyed by driver ID; active-ride updates use `location-updates` keyed by ride ID. Location Sync updates Redis GEO state. Ride Service searches available drivers within 5 km, nearest first. Ride locations are published through Redis sharded Pub/Sub and forwarded to clients by the WebSocket Gateway.
 
-```mermaid
-flowchart TB
-    D[Driver App / GPS Simulator] -->|HTTP POST GPS| IG[Location Ingestion Service]
-    IG -->|No rideId; key = driverId| DL[Kafka: driver-locations]
-    DL --> LS[Location Sync Service]
-    LS -->|busy / vehicle checks; GEOADD + last-seen ZADD| AV[Redis available-driver GEO sets]
-
-    IG -->|rideId present; key = rideId| LU[Kafka: location-updates]
-    LU --> LS
-    LS -->|GEOADD loc:rideId + SPUBLISH ride:rideId:loc| R[(Redis)]
-    R -->|SSUBSCRIBE| W[WebSocket Gateway]
-    W -->|STOMP / WebSocket| C[Customer App]
-    W -->|STOMP / WebSocket| D
-
-    Kafka -->|ride-offered event| N[Notification Service]
-    N -->|SPUBLISH driver offer channel| R
-    N -->|push notification| F[Firebase FCM]
-```
-
-**Implementation boundary:** the current WebSocket subscriber forwards `ride:<rideId>:loc` location messages. Notification Service publishes offers to a separate Redis sharded channel and sends FCM; the WebSocket Gateway does not currently bridge that driver-offer channel. Local development uses Redis, not a verified Redis Cluster deployment. The code uses Redis sharded Pub/Sub commands (`SPUBLISH` / `SSUBSCRIBE`).
-
-**Redis/Lettuce lesson:** an earlier implementation mixed raw `SPUBLISH` into Spring Data Redis's `executePipelined` callback with `GEOADD` and `EXPIRE`. The current implementation pipelines only the geospatial write and TTL, serializes the event as a string, and publishes once with `StatefulRedisConnection<String, String>.sync().spublish(...)`. The reported ≈10× duplicate fan-out is a development observation; the archived validation bundle has no controlled before/after measurement for that multiplier. See the current [location consumer implementation](https://github.com/shashank35i/location-sync-service/blob/main/src/main/java/com/goon/locationsyncservice/service/ConsumeLocationUpdates.java).
-
-## Booking and lifecycle
+### Ride lifecycle
 
 ```mermaid
 sequenceDiagram
-    autonumber
-    participant C as Customer App
-    participant G as API Gateway
+    participant C as Customer
+    participant R as Ride Service
     participant P as Pricing Service
     participant O as Local OSRM
-    participant R as Ride Service
-    participant DB as MySQL ride_db
+    participant DB as MySQL
     participant K as Kafka
-    participant M as Matching Worker
-    participant Redis as Redis GEO
+    participant M as Matching worker
+    participant Redis
 
-    C->>G: Request estimate
-    G->>P: Estimate route fare
-    P->>O: Driving route lookup
-    O-->>P: Road distance
-    P-->>C: Signed fare quote
-    C->>G: Create ride + quote + Idempotency-Key
-    G->>R: Authenticated request
-    R->>R: Verify signature, subject, expiry, coords, vehicle, fare
-    R->>DB: Transaction: insert Ride + claim customer + outbox
-    DB-->>R: Commit
-    R-->>C: 201 Created
-    R->>K: Publish RIDE_REQUESTED from outbox
-    K->>M: Consume ride-requested
-    M->>Redis: GEOSEARCH nearest available drivers within 5 km
+    C->>R: Request fare quote
+    R->>P: Estimate fare
+    P->>O: Road route lookup
+    O-->>P: Distance and duration
+    P-->>C: Signed quote
+    C->>R: Create ride + quote + Idempotency-Key
+    R->>R: Verify quote and request
+    R->>DB: Save ride, customer claim, and outbox
+    R-->>C: Created
+    K->>M: RIDE_REQUESTED event
+    M->>Redis: Find nearest available drivers
 ```
 
-Ride state moves through `REQUESTED → ASSIGNED → DRIVER_ARRIVED → STARTED → ENDED`; a customer may cancel before start. Each state change and its outbox event are stored atomically.
+Ride states: `REQUESTED → ASSIGNED → DRIVER_ARRIVED → STARTED → ENDED`. Ride changes and their outbox events are committed together. Cancellation is supported before ride start.
 
-### Driver arrival: Haversine geofence
+## Engineering highlights
 
-Ride Lifecycle verifies the assigned driver, rejects a missing or stale GPS heartbeat (older than 15 seconds), reads that driver's ride-specific Redis position, then calculates great-circle distance to pickup. Arrival is accepted only within 100 m. Nearby matching is different: Redis GEOSEARCH returns available drivers within 5 km, nearest first.
+- **Concurrent booking protection:** database claims enforce one active ride per customer and per driver. A 2-request customer race produced one `201` and one `409`; a 10-pair driver race produced one successful accept per pair.
+- **Idempotent ride creation:** a 200-thread same-key JMeter run returned 200 successful responses while creating one ride and one `RIDE_REQUESTED` event.
+- **UUID mapping fix:** corrected a MySQL/Hibernate `BINARY(64)` versus 16-byte UUID mismatch by standardizing UUID storage on `BINARY(16)`.
+- **Transactional outbox:** ride state and events are persisted together, then published to Kafka. Consumers use event IDs and idempotent processing where implemented.
+- **GPS load run:** with 20 driver IDs and 500 JMeter threads, measured 221.33 requests/sec, p95 1,212 ms, and 0% errors. The local Kafka lag drained to zero after traffic stopped.
+- **Outbox recovery run:** 194 acknowledged ride creates were published and replay did not create a second offer. Six in-flight requests returned 500 during forced service termination, so the run was partial.
+
+Detailed JMeter plans, sanitized results, and SQL checks are in [benchmarks](benchmarks/RESULTS.md).
+
+## Driver arrival check
+
+Ride Lifecycle verifies the assigned driver and requires a GPS update no older than 15 seconds. It reads the ride-specific Redis position and calculates great-circle distance to pickup. Arrival is accepted within 100 m. Starting a ride also requires the customer OTP.
 
 $$
 a = \sin^2(\Delta\varphi / 2) + \cos(\varphi_1)\cos(\varphi_2)\sin^2(\Delta\lambda / 2)
 $$
 
 $$
-d = 2R \times atan2(\sqrt{a}, \sqrt{1-a})
+d = 2R \times atan2(\sqrt{a}, \sqrt{1-a}), \qquad R \approx 6,371,000\text{ m}
 $$
 
-Here, $R \approx 6,371,000$ m.
+Here, `φ` and `λ` are latitude and longitude in radians. See [RideLifecycleService](https://github.com/shashank35i/Ride-Service/blob/main/src/main/java/com/goon/rideservice/service/RideLifecycleService.java) and [NearbyDriverService](https://github.com/shashank35i/Ride-Service/blob/main/src/main/java/com/goon/rideservice/service/NearbyDriverService.java).
 
-`φ` is latitude and `λ` longitude in radians. Arrival requires `d ≤ 100 m`, a fresh GPS update, and the correct driver-to-ride assignment. Starting requires the ride to be `DRIVER_ARRIVED` and a customer OTP; attempts are capped at five.
+## Pricing and payments
 
-Source: [`RideLifecycleService`](https://github.com/shashank35i/Ride-Service/blob/main/src/main/java/com/goon/rideservice/service/RideLifecycleService.java) · [`NearbyDriverService`](https://github.com/shashank35i/Ride-Service/blob/main/src/main/java/com/goon/rideservice/service/NearbyDriverService.java)
-
-## Concurrency and idempotency
-
-$$
-\forall d,\quad |A_d| \leq 1
-\qquad
-\forall c,\quad |A_c| \leq 1
-\qquad
-\forall r,\quad |O_r| \leq 1
-$$
-
-$A_d$ and $A_c$ are active rides for a driver and customer; $O_r$ is accepted offers for a ride.
-
-- **One active ride per driver:** `driver_assignments` uses `driver_id` as its primary key and unique `ride_id`. An atomic insert lets only one competing accept claim the driver.
-- **One active ride per customer:** `customer_active_rides` uses `customer_id BINARY(16)` as primary key and unique `ride_id BINARY(16)`. It is inserted in the same transaction as Ride and Outbox. A different-key concurrent booking returns HTTP 409; end/cancel releases the claim.
-- **One accepted driver per ride:** accept locks Ride then RideOffer, validates their current state, claims the driver, and commits the assignment and event together.
-- **Retry-safe create:** customer + idempotency key has a database uniqueness constraint. Matching payload hashes recover the existing ride; same key with changed request returns 409.
-- **Signed quotes:** Ride Service verifies signature, customer subject, expiry, coordinates, vehicle type, currency, and fare before a new insert.
-
-### UUID mapping bug
-
-The first high-concurrency retry test returned HTTP 500 for duplicates even though SQL showed a single inserted ride. The cause was a Hibernate/MySQL UUID mapping mismatch: UUID columns were stored as `BINARY(64)` while UUID parameters were bound as 16 bytes, leaving padded values that recovery queries did not match reliably. UUID mappings and schema were corrected to `BINARY(16)`; the later 200-thread same-key run returned 200 HTTP 201 responses and still created exactly one ride and one `RIDE_REQUESTED` outbox row.
-
-Migrations: [active customer claim](database/migrations/2026-10-28-customer-active-rides.sql) · [UUID binary-16 migration](database/migrations/2026-10-28-ride-uuid-binary16.sql)
-
-## Outbox, retries, and service tokens
-
-```mermaid
-flowchart LR
-    Tx[MySQL transaction] -->|state + Outbox row| Commit[Commit]
-    Commit --> Publisher[Outbox publisher]
-    Publisher -->|eventId header| K[(Kafka)]
-    K --> Consumer[Consumer]
-    Consumer -->|processed event / idempotent operation| State[Business state]
-    Consumer -->|backoff retries| Retry[Retry handler]
-    Retry -->|exhausted| DLT[Dead-letter topic]
-```
-
-Ride matching uses manual immediate acknowledgments, bounded retries with backoff, and a dead-letter topic. Consumers use event IDs and idempotent processing where implemented. The target is **one business effect under replay**, not universal exactly-once delivery.
-
-Internal HTTP/gRPC calls use Keycloak client-credentials registrations. Gateway authorization uses a fixed service principal and serializes token cache misses per client registration; internal token providers cache by registration ID/scope set with single-flight refresh. Caches are in process, so each service instance has its own cache. In a focused local diagnostic, Keycloak warning logs fell from 100 over three seconds to two around the retest; this was a warning count, not a token-fetch counter. Details: [token diagnostic](benchmarks/evidence/token-cache-diagnostic.json).
-
-## Fare and payments
-
-Pricing Service calls local OSRM at `http://localhost:5000` for actual road distance; no public OSRM demo server is used by the configured application. The service signs the quote Ride Service verifies. Final fare adds waiting charges after the first 120 free seconds.
-
-```mermaid
-sequenceDiagram
-    participant Ride as Ride Service
-    participant Pricing as Pricing Service
-    participant Pay as Payment Service
-    participant RP as Razorpay
-    participant K as Kafka
-    participant N as Notification Service
-
-    Ride->>Pricing: Calculate final fare (gRPC)
-    Pricing-->>Ride: Final fare
-    Ride->>Ride: Save fare and FARE_FINALIZED outbox
-    Ride->>K: Publish fare-finalized
-    K->>Pay: Consume fare event
-    Pay->>RP: Create checkout order
-    RP-->>Pay: Order details
-    RP->>Pay: Signed payment webhook
-    Pay->>Pay: Verify signature, deduplicate, update payment
-    Pay->>K: payment-completed / payment-failed outbox
-    K->>Ride: Update ride payment status
-    K->>N: Notify customer
-```
-
-## Load-test results
-
-JMeter 5.6.3 measured these GPS runs on one developer machine:
-
-| Threads | Samples | RPS | p50 | p95 | p99 | Errors |
-|---:|---:|---:|---:|---:|---:|---:|
-| 100 | 2,797 | 48.62 | 6 ms | 23 ms | 89 ms | 0% |
-| 250 | 6,872 | 118.75 | 8 ms | 249 ms | 600 ms | 0% |
-| 500 | 12,801 | 221.33 | 40 ms | 1,212 ms | 1,637 ms | 0% |
-
-At 500 threads, 20 driver IDs were used, events reached all three partitions, CPU peaked at 100%, and RAM peaked at 16,073.5 MiB. Lag was 1,006 immediately after the run and 0 after the recorded drain wait. This indicates the local consumer group caught up after traffic stopped; it does not establish production capacity.
-
-An earlier single-driver comparison recorded immediate lag of **8,817 before** and **3,049 after** partition expansion plus additional consumers; the later snapshot drained to zero after 30 seconds. That is a 65.4% reduction between separate runs, not a controlled causal benchmark. With a single driver key, events remain ordered on one partition and cannot be split across consumers. [Lag evidence](benchmarks/evidence/single-key-lag-comparison.json)
-
-See [full test setups, caveats, plans, sanitized JTLs, and JSON results](benchmarks/RESULTS.md).
-
-## Self-hosted OSRM
-
-Pricing Service config sets `app.osrm.url: http://localhost:5000`. Supply an OpenStreetMap `.osm.pbf` extract for your test area; map and processed graph files are not committed. Example MLD setup following the [official OSRM Docker workflow](https://github.com/Project-OSRM/osrm-backend#using-docker) (pin an image tag for repeatability):
-
-```bash
-mkdir -p osrm-data
-# Place an extract at osrm-data/region.osm.pbf
-export OSRM_IMAGE=ghcr.io/project-osrm/osrm-backend:PINNED_VERSION
-docker run --rm -t -v "$PWD/osrm-data:/data" "$OSRM_IMAGE" osrm-extract -p /opt/car.lua /data/region.osm.pbf
-docker run --rm -t -v "$PWD/osrm-data:/data" "$OSRM_IMAGE" osrm-partition /data/region.osrm
-docker run --rm -t -v "$PWD/osrm-data:/data" "$OSRM_IMAGE" osrm-customize /data/region.osrm
-docker run --rm -it -p 5000:5000 -v "$PWD/osrm-data:/data" "$OSRM_IMAGE" osrm-routed --algorithm mld /data/region.osrm
-```
-
-Configure Pricing Service with the OSRM address reachable from its own network namespace. The app is configured for the local endpoint, not the public demo endpoint.
+Pricing Service uses the locally hosted OSRM endpoint configured at `http://localhost:5000`; it signs fare quotes that Ride Service validates. After a ride ends, Ride Service requests the final fare, saves it with a `FARE_FINALIZED` outbox event, and Payment Service creates a Razorpay checkout. Payment status changes only after webhook signature verification.
 
 ## Local development
 
-There is no root Maven aggregator or one-command stack launcher yet. Current local ports:
-
-| Component | Port |
-|---|---:|
-| API Gateway | 8087 |
-| Customer / Driver / Ride Services | 8088 / 8084 / 8083 |
-| Pricing HTTP / gRPC | 8086 / 9090 |
-| Location Ingestion / Location Sync | 8080 / 8081 |
-| Notification / Payment Services | 8085 / 8089 |
-| WebSocket Gateway | 8082 |
-| Local OSRM | 5000 |
-
-Start MySQL, Kafka, Redis, Keycloak, local OSRM, and any required Firebase / Razorpay test configuration first. Each service is its own Maven project:
+Services are separate Maven projects and target Java 21. Start MySQL, Kafka, Redis, Keycloak, and local OSRM, then run an individual service, for example:
 
 ```bash
 cd ride-service
 ./mvnw spring-boot:run
 ```
 
-On Windows, run `mvnw.cmd`. Apply the SQL migrations to the matching service database. POMs target Java 21; recorded validation ran on JDK 23.0.1. Supply secrets via environment variables or local untracked configuration—never commit signing keys, client secrets, database passwords, Firebase credentials, Razorpay keys, JWTs, OTPs, or device tokens.
+On Windows, use `mvnw.cmd`. Pricing Service expects OSRM on port `5000`.
 
-## Validation bundle
-
-- [Benchmark summary](benchmarks/RESULTS.md)
-- [Portable JMeter plans](benchmarks/plans/)
-- [Sanitized JTL results](benchmarks/results/)
-- [Machine-readable evidence](benchmarks/evidence/)
-- [SQL invariant checks](benchmarks/sql/verify-results.sql)
-
-Fixture templates include headers only. Create fresh test identities and quote data locally before running a plan.
-
-## License
-
-No license is declared yet. Do not assume unrestricted reuse until one is added.
+| Component | Port |
+|---|---:|
+| API Gateway | 8087 |
+| Customer / Driver / Ride | 8088 / 8084 / 8083 |
+| Pricing HTTP / gRPC | 8086 / 9090 |
+| Location Ingestion / Sync | 8080 / 8081 |
+| Notification / Payment | 8085 / 8089 |
+| WebSocket Gateway | 8082 |
+| OSRM | 5000 |
