@@ -132,15 +132,14 @@ Ride state moves through `REQUESTED → ASSIGNED → DRIVER_ARRIVED → STARTED 
 Ride Lifecycle verifies the assigned driver, rejects a missing or stale GPS heartbeat (older than 15 seconds), reads that driver's ride-specific Redis position, then calculates great-circle distance to pickup. Arrival is accepted only within 100 m. Nearby matching is different: Redis GEOSEARCH returns available drivers within 5 km, nearest first.
 
 $$
-a = \sin^2\left(\frac{\Delta\varphi}{2}\right)
-  + \cos(\varphi_1)\cos(\varphi_2)
-    \sin^2\left(\frac{\Delta\lambda}{2}\right)
+a = \sin^2(\Delta\varphi / 2) + \cos(\varphi_1)\cos(\varphi_2)\sin^2(\Delta\lambda / 2)
 $$
 
 $$
-d = 2R\operatorname{atan2}\left(\sqrt{a}, \sqrt{1-a}\right),
-\qquad R \approx 6{,}371{,}000\text{ m}
+d = 2R \times atan2(\sqrt{a}, \sqrt{1-a})
 $$
+
+Here, $R \approx 6,371,000$ m.
 
 `φ` is latitude and `λ` longitude in radians. Arrival requires `d ≤ 100 m`, a fresh GPS update, and the correct driver-to-ride assignment. Starting requires the ride to be `DRIVER_ARRIVED` and a customer OTP; attempts are capped at five.
 
@@ -149,12 +148,14 @@ Source: [`RideLifecycleService`](https://github.com/shashank35i/Ride-Service/blo
 ## Concurrency and idempotency
 
 $$
-\forall d,\quad |\operatorname{ActiveRides}(d)| \leq 1
+\forall d,\quad |A_d| \leq 1
 \qquad
-\forall c,\quad |\operatorname{ActiveRides}(c)| \leq 1
+\forall c,\quad |A_c| \leq 1
 \qquad
-\forall r,\quad |\operatorname{AcceptedOffers}(r)| \leq 1
+\forall r,\quad |O_r| \leq 1
 $$
+
+$A_d$ and $A_c$ are active rides for a driver and customer; $O_r$ is accepted offers for a ride.
 
 - **One active ride per driver:** `driver_assignments` uses `driver_id` as its primary key and unique `ride_id`. An atomic insert lets only one competing accept claim the driver.
 - **One active ride per customer:** `customer_active_rides` uses `customer_id BINARY(16)` as primary key and unique `ride_id BINARY(16)`. It is inserted in the same transaction as Ride and Outbox. A different-key concurrent booking returns HTTP 409; end/cancel releases the claim.
