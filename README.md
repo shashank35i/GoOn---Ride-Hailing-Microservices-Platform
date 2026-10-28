@@ -38,6 +38,8 @@ The benchmark bundle contains portable JMeter plans, sanitized JTLs, result summ
 
 ## Architecture
 
+[High-level design (HLD) in Excalidraw](https://excalidraw.com/#json=LZ0dhA7Fv0mq9qvbU2c6d,oJ580YLlsaPw_cdPOC5HAg)
+
 ```mermaid
 flowchart LR
     Apps[Customer and Driver Apps] --> Gateway[API Gateway]
