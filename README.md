@@ -1,8 +1,8 @@
-﻿# GoOn | Ride-hailing platform
+# GoOn | Ride-hailing platform
 
 GoOn is a distributed ride-hailing backend built as ten independently deployable Spring Boot services. Its core engineering challenge is coordinating state that spans a synchronous booking flow, asynchronous location streams, competing driver actions, and external payment callbacks.
 
-[System HLD · Excalidraw](https://excalidraw.com/#json=LZ0dhA7Fv0mq9qvbU2c6d,oJ580YLlsaPw_cdPOC5HAg) · [Validation plans and evidence](benchmarks/RESULTS.md)
+[System HLD · Excalidraw](https://excalidraw.com/#json=D2atq182zMWkLQBuF3ELN,7Ad97etRNaexRR1o91NAdg) · [Validation plans and evidence](benchmarks/RESULTS.md)
 
 ## What the system does
 
